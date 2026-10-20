@@ -481,7 +481,7 @@ static int qcom_cpufreq_hw_read_lut(struct platform_device *pdev,
 		dev_dbg(dev, "index=%d freq=%d, core_count %d\n",
 				i, c->table[i].frequency, core_count);
 
-		if (core_count != max_cores)
+		if (0) /* disable boost flag */ // if (core_count != max_cores)
 			c->table[i].flags  = CPUFREQ_BOOST_FREQ;
 
 		/* Two of the same frequencies means end of table. */
