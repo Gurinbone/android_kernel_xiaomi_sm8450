@@ -95,8 +95,6 @@ static const int usb_prop_map[USB_PROP_MAX] = {
 	[USB_CURR_MAX]		= POWER_SUPPLY_PROP_CURRENT_MAX,
 	[USB_INPUT_CURR_LIMIT]	= POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT,
 	[USB_ADAP_TYPE]		= POWER_SUPPLY_PROP_USB_TYPE,
-	[USB_TEMP]		= POWER_SUPPLY_PROP_TEMP,
-	[USB_SCOPE]		= POWER_SUPPLY_PROP_SCOPE,
 };
 
 static const int wls_prop_map[WLS_PROP_MAX] = {
@@ -281,7 +279,7 @@ int get_property_id(struct psy_state *pst,
 			return i;
 
 	if (pst->psy)
-		pr_err("No property id for property %d in psy %s\n", prop,
+		pr_debug("No property id for property %d in psy %s\n", prop,
 			pst->psy->desc->name);
 
 	return -ENOENT;
@@ -776,13 +774,16 @@ static void battery_chg_check_status_work(struct work_struct *work)
 		return;
 	}
 
-	rc = read_property_id(bcdev, wireless_pst, WLS_ONLINE);
-	if (rc < 0) {
-		pr_debug("Failed to read WLS_ONLINE, rc=%d\n", rc);
-		return;
+	if (!bcdev->wls_not_supported) {
+		rc = read_property_id(bcdev, wireless_pst, WLS_ONLINE);
+		if (rc < 0) {
+			pr_debug("Failed to read WLS_ONLINE, rc=%d\n", rc);
+			return;
+		}
 	}
 
-	if (usb_pst->prop[USB_ONLINE] == 0 && wireless_pst->prop[WLS_ONLINE] == 0) {
+	if (usb_pst->prop[USB_ONLINE] == 0 &&
+	    (bcdev->wls_not_supported || wireless_pst->prop[WLS_ONLINE] == 0)) {
 		pr_debug("usb and wireless is not online\n");
 		return;
 	}
@@ -1205,8 +1206,6 @@ static enum power_supply_property usb_props[] = {
 	POWER_SUPPLY_PROP_CURRENT_MAX,
 	POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT,
 	POWER_SUPPLY_PROP_USB_TYPE,
-	POWER_SUPPLY_PROP_TEMP,
-	POWER_SUPPLY_PROP_SCOPE,
 };
 
 static enum power_supply_usb_type usb_psy_supported_types[] = {
@@ -2293,8 +2292,11 @@ static int battery_chg_parse_dt(struct battery_chg_dev *bcdev)
 	struct psy_state *pst = &bcdev->psy_list[PSY_TYPE_BATTERY];
 	int rc, len;
 
-	of_property_read_string(node, "qcom,wireless-fw-name",
-				&bcdev->wls_fw_name);
+	bcdev->wls_not_supported = of_property_read_bool(node,
+			"qcom,wireless-charging-not-supported");
+	if (!bcdev->wls_not_supported)
+		of_property_read_string(node, "qcom,wireless-fw-name",
+					&bcdev->wls_fw_name);
 
 	of_property_read_u32(node, "qcom,shutdown-voltage",
 				&bcdev->shutdown_volt_mv);
@@ -2366,17 +2368,9 @@ static int battery_chg_ship_mode(struct notifier_block *nb, unsigned long code,
 
 static int register_extcon_conn_type(struct battery_chg_dev *bcdev)
 {
-	struct psy_state *pst = &bcdev->psy_list[PSY_TYPE_USB];
 	int rc;
 
-	rc = read_property_id(bcdev, pst, USB_CONNECTOR_TYPE);
-	if (rc < 0) {
-		pr_err("Failed to read prop USB_CONNECTOR_TYPE, rc=%d\n",
-			rc);
-		return rc;
-	}
-
-	bcdev->connector_type = pst->prop[USB_CONNECTOR_TYPE];
+	bcdev->connector_type = USB_CONNECTOR_TYPE_TYPEC;
 	bcdev->usb_prev_mode = EXTCON_NONE;
 
 	bcdev->extcon = devm_extcon_dev_allocate(bcdev->dev,
