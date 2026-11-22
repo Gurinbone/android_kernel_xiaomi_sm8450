@@ -5291,15 +5291,17 @@ void xm_charger_debug_info_print_work(struct work_struct *work)
 	}
 
 #if defined(CONFIG_MI_WIRELESS)
-	wls_psy = bcdev->psy_list[PSY_TYPE_WLS].psy;
-	if (wls_psy != NULL) {
-		rc = wls_psy_get_prop(wls_psy, POWER_SUPPLY_PROP_ONLINE, &val);
-		if (!rc)
-			wls_present = val.intval;
-		else
+	if (!bcdev->wls_not_supported) {
+		wls_psy = bcdev->psy_list[PSY_TYPE_WLS].psy;
+		if (wls_psy != NULL) {
+			rc = wls_psy_get_prop(wls_psy, POWER_SUPPLY_PROP_ONLINE, &val);
+			if (!rc)
+				wls_present = val.intval;
+			else
+				wls_present = 0;
+		} else {
 			wls_present = 0;
-	} else {
-		wls_present = 0;
+		}
 	}
 #endif
 
@@ -5382,6 +5384,7 @@ static int add_xiaomi_uevent(struct device *dev, struct kobj_uevent_env *env)
 		return 0;
 
 #if defined(CONFIG_MI_WIRELESS)
+	if (!bcdev->wls_not_supported) {
 #if !defined(CONFIG_WIRELESS_REVERSE_CLOSE)
 	reverse_chg_state_show( &(bcdev->battery_class), NULL, prop_buf);
 	snprintf(uevent_string, MAX_UEVENT_LENGTH, "POWER_SUPPLY_REVERSE_CHG_STATE=%s", prop_buf);
@@ -5443,6 +5446,7 @@ static int add_xiaomi_uevent(struct device *dev, struct kobj_uevent_env *env)
 	tx_adapter_show( &(bcdev->battery_class), NULL, prop_buf);
 	snprintf(uevent_string, MAX_UEVENT_LENGTH, "POWER_SUPPLY_TX_ADAPTER=%s", prop_buf);
 	add_uevent_var(env, uevent_string);
+	}
 #endif
 
 	soc_decimal_show( &(bcdev->battery_class), NULL, prop_buf);
